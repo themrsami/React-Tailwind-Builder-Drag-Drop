@@ -139,6 +139,8 @@ const Node: React.FC<NodeProps> = ({ node, level, onAddChild, onRenameNode, sele
         />
       ))}
       {selectedNodes.includes(node.id) && (
+        <>
+        <h2 className="text-lg font-semibold mt-2">Add Node Chid</h2>
         <div className="flex items-center mt-2">
           <Input
             value={newNodeName}
@@ -158,10 +160,11 @@ const Node: React.FC<NodeProps> = ({ node, level, onAddChild, onRenameNode, sele
             placeholder="Text (optional)"
             className="mr-2"
           />
-          <Button onClick={addChild} size="icon">
-            <Plus size={16} />
+          <Button onClick={addChild} size="icon" className='px-4'>
+            <Plus size={32} />
           </Button>
         </div>
+        </>
       )}
     </div>
   )
