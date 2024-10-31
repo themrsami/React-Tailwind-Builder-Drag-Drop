@@ -13,7 +13,7 @@ interface TailwindClasses {
 }
 
 export const OptionSelector: React.FC = () => {
-  const { selectedElement, options, updateOption, selectedNodeId } = useSectionBuilder()
+  const { selectedElement, options, updateOption, selectedNodes } = useSectionBuilder()
   const [tailwindClasses, setTailwindClasses] = useState<TailwindClasses>({})
   const [isLoading, setIsLoading] = useState(true)
 
@@ -51,6 +51,7 @@ export const OptionSelector: React.FC = () => {
           else if (className.startsWith('flex') || className.startsWith('items-') || className.startsWith('justify-')) classes.flexbox.push(className)
           else if (className.startsWith('grid-') || className.startsWith('col-') || className.startsWith('row-')) classes.grid.push(className)
           else if (className.startsWith('bg-')) classes.backgroundColor.push(className)
+          
           else if (className.startsWith('text-') && !className.includes('align') && !className.includes('decoration')) classes.textColor.push(className)
           else if (className.startsWith('border-') && className.length > 7) classes.borderColor.push(className)
           else if (className.startsWith('border-') && className.length <= 7) classes.borderWidth.push(className)
@@ -66,28 +67,27 @@ export const OptionSelector: React.FC = () => {
       })
       .catch(error => {
         console.error('Error fetching Tailwind classes:', error)
-        
         setIsLoading(false)
       })
   }, [])
 
   const handleOptionChange = (key: string, value: string, isChecked: boolean) => {
-    if (!selectedNodeId) return
+    selectedNodes.forEach(nodeId => {
+      const currentOptions = options[nodeId]?.[key] ? options[nodeId][key].split(' ') : []
+      let newOptions: string[]
 
-    const currentOptions = options[selectedNodeId]?.[key] ? options[selectedNodeId][key].split(' ') : []
-    let newOptions: string[]
+      if (isChecked) {
+        newOptions = [...currentOptions, value]
+      } else {
+        newOptions = currentOptions.filter(option => option !== value)
+      }
 
-    if (isChecked) {
-      newOptions = [...currentOptions, value]
-    } else {
-      newOptions = currentOptions.filter(option => option !== value)
-    }
-
-    updateOption(selectedNodeId, key, newOptions.join(' '))
+      updateOption(nodeId, key, newOptions.join(' '))
+    })
   }
 
-  if (!selectedElement || !selectedNodeId) {
-    return <div className="p-4">Select an element and a node to see options</div>
+  if (!selectedElement || selectedNodes.length === 0) {
+    return <div className="p-4">Select an element and at least one node to see options</div>
   }
 
   if (isLoading) {
@@ -113,7 +113,7 @@ export const OptionSelector: React.FC = () => {
                       <div key={cls} className="flex items-center space-x-2">
                         <Checkbox
                           id={cls}
-                          checked={options[selectedNodeId]?.[key]?.includes(cls)}
+                          checked={selectedNodes.every(nodeId => options[nodeId]?.[key]?.includes(cls))}
                           onCheckedChange={(checked) => handleOptionChange(key, cls, checked as boolean)}
                         />
                         <Label htmlFor={cls}>{cls}</Label>
@@ -132,14 +132,14 @@ export const OptionSelector: React.FC = () => {
 
   return (
     <div className="p-4 space-y-4 h-full overflow-y-auto">
-      <h2 className="text-lg font-semibold">Options for {selectedNodeId}</h2>
+      <h2 className="text-lg font-semibold">Options for selected nodes</h2>
       {renderOptions()}
       <div className="space-y-2">
         <Label htmlFor="customClasses">Custom Classes</Label>
         <Input
           id="customClasses"
-          value={options[selectedNodeId]?.customClasses || ''}
-          onChange={(e) => updateOption(selectedNodeId, 'customClasses', e.target.value)}
+          value={selectedNodes.length === 1 ? options[selectedNodes[0]]?.customClasses || '' : ''}
+          onChange={(e) => selectedNodes.forEach(nodeId => updateOption(nodeId, 'customClasses', e.target.value))}
           placeholder="Enter custom Tailwind classes"
         />
       </div>

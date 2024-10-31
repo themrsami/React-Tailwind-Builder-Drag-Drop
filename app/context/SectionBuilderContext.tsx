@@ -9,6 +9,7 @@ interface TreeNode {
   name: string
   tagName: string
   children: TreeNode[]
+  text?: string
 }
 
 interface SectionBuilderContextType {
@@ -20,10 +21,10 @@ interface SectionBuilderContextType {
   componentName: string
   setComponentName: (name: string) => void
   nodeTree: TreeNode[]
-  updateNodeTree: (parentId: string, newNode: TreeNode) => void
-  renameNode: (nodeId: string, newName: string, newTagName: string) => void
-  selectedNodeId: string | null
-  setSelectedNodeId: (id: string | null) => void
+  updateNodeTree: (updater: (prevTree: TreeNode[]) => TreeNode[]) => void
+  renameNode: (nodeId: string, newName: string, newTagName: string, newText?: string) => void
+  selectedNodes: string[]
+  setSelectedNodes: React.Dispatch<React.SetStateAction<string[]>>
 }
 
 const SectionBuilderContext = createContext<SectionBuilderContextType | undefined>(undefined)
@@ -43,7 +44,7 @@ export const SectionBuilderProvider: React.FC<{ children: ReactNode }> = ({ chil
   const [nodeTree, setNodeTree] = useState<TreeNode[]>([
     { id: 'root', name: 'Root', tagName: 'div', children: [] }
   ])
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [selectedNodes, setSelectedNodes] = useState<string[]>([])
 
   const updateOption = useCallback((nodeId: string, key: string, value: string) => {
     setOptions(prevOptions => {
@@ -56,33 +57,20 @@ export const SectionBuilderProvider: React.FC<{ children: ReactNode }> = ({ chil
       } else {
         delete newOptions[nodeId][key]
       }
-      console.log('Options updated:', newOptions) // Debugging log
       return newOptions
     })
   }, [])
 
-  const updateNodeTree = useCallback((parentId: string, newNode: TreeNode) => {
-    setNodeTree(prevTree => {
-      const updateChildren = (nodes: TreeNode[]): TreeNode[] => {
-        return nodes.map(node => {
-          if (node.id === parentId) {
-            return { ...node, children: [...node.children, newNode] }
-          } else if (node.children.length > 0) {
-            return { ...node, children: updateChildren(node.children) }
-          }
-          return node
-        })
-      }
-      return updateChildren(prevTree)
-    })
+  const updateNodeTree = useCallback((updater: (prevTree: TreeNode[]) => TreeNode[]) => {
+    setNodeTree(updater)
   }, [])
 
-  const renameNode = useCallback((nodeId: string, newName: string, newTagName: string) => {
+  const renameNode = useCallback((nodeId: string, newName: string, newTagName: string, newText?: string) => {
     setNodeTree(prevTree => {
       const updateNode = (nodes: TreeNode[]): TreeNode[] => {
         return nodes.map(node => {
           if (node.id === nodeId) {
-            return { ...node, name: newName, tagName: newTagName }
+            return { ...node, name: newName, tagName: newTagName, text: newText }
           } else if (node.children.length > 0) {
             return { ...node, children: updateNode(node.children) }
           }
@@ -106,8 +94,8 @@ export const SectionBuilderProvider: React.FC<{ children: ReactNode }> = ({ chil
         nodeTree,
         updateNodeTree,
         renameNode,
-        selectedNodeId,
-        setSelectedNodeId,
+        selectedNodes,
+        setSelectedNodes,
       }}
     >
       {children}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useSectionBuilder } from '../context/SectionBuilderContext'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -8,23 +8,25 @@ import { Slider } from '@/components/ui/slider'
 import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { NodeTree } from './NodeTree'
+import { InteractivePreview } from './InteractivePreview'
 
 interface TreeNode {
   id: string
   name: string
   tagName: string
   children: TreeNode[]
+  text?: string
 }
 
 export default function PreviewAndCode() {
-  const { options, componentName, nodeTree } = useSectionBuilder()
+  const { options, componentName, nodeTree, updateNodeTree } = useSectionBuilder()
   const [zoom, setZoom] = useState(100)
 
   const generateNodeJSX = (node: TreeNode, indent: string = ''): string => {
     const nodeClasses = options[node.id] ? Object.values(options[node.id]).filter(Boolean).join(' ') : ''
     const childrenJSX = node.children.map(child => generateNodeJSX(child, indent + '  ')).join('\n')
     return `${indent}<${node.tagName} id="${node.id}" className="${nodeClasses}">
-${childrenJSX || `${indent}  {/* ${node.name} content */}`}
+${childrenJSX || (node.text ? `${indent}  ${node.text}` : `${indent}  {/* ${node.name} content */}`)}
 ${indent}</${node.tagName}>`
   }
 
@@ -39,22 +41,49 @@ ${generateNodeJSX(nodeTree[0], '    ')}
 `
   }, [componentName, nodeTree, options])
 
-  const generateNodeHTML = (node: TreeNode): string => {
-    const nodeClasses = options[node.id] ? Object.values(options[node.id]).filter(Boolean).join(' ') : ''
-    const childrenHTML = node.children.map(child => generateNodeHTML(child)).join('\n')
-    return `<${node.tagName} id="${node.id}" class="${nodeClasses}">
-  ${childrenHTML || `<!-- ${node.name} content -->`}
-</${node.tagName}>`
-  }
-
-  const previewContent = useMemo(() => {
-    return generateNodeHTML(nodeTree[0])
-  }, [nodeTree, options])
-
   const handleCopy = () => {
     navigator.clipboard.writeText(generateCode)
     toast.success('Code copied to clipboard!')
   }
+
+  const handleNodeMove = useCallback((nodeId: string, newParentId: string, index: number) => {
+    updateNodeTree(prevTree => {
+      const moveNode = (nodes: TreeNode[], targetId: string): [TreeNode | null, TreeNode[]] => {
+        for (let i = 0; i < nodes.length; i++) {
+          if (nodes[i].id === targetId) {
+            const [movedNode] = nodes.splice(i, 1)
+            return [movedNode, nodes]
+          }
+          if (nodes[i].children.length > 0) {
+            const [movedNode, updatedChildren] = moveNode(nodes[i].children, targetId)
+            if (movedNode) {
+              nodes[i].children = updatedChildren
+              return [movedNode, nodes]
+            }
+          }
+        }
+        return [null, nodes]
+      }
+
+      const [movedNode, updatedTree] = moveNode(prevTree, nodeId)
+      if (movedNode) {
+        const insertNode = (nodes: TreeNode[], targetId: string): TreeNode[] => {
+          for (let i = 0; i < nodes.length; i++) {
+            if (nodes[i].id === targetId) {
+              nodes[i].children.splice(index, 0, movedNode)
+              return nodes
+            }
+            if (nodes[i].children.length > 0) {
+              nodes[i].children = insertNode(nodes[i].children, targetId)
+            }
+          }
+          return nodes
+        }
+        return insertNode(updatedTree, newParentId)
+      }
+      return prevTree
+    })
+  }, [updateNodeTree])
 
   useEffect(() => {
     // Dynamically load Tailwind CSS
@@ -87,10 +116,7 @@ ${generateNodeJSX(nodeTree[0], '    ')}
           <span className="text-sm text-gray-500">Zoom: {zoom}%</span>
         </div>
         <div style={{ zoom: `${zoom}%` }}>
-          <div 
-            className="preview-content"
-            dangerouslySetInnerHTML={{ __html: previewContent }}
-          />
+          <InteractivePreview nodeTree={nodeTree} options={options} onNodeMove={handleNodeMove} />
         </div>
       </TabsContent>
       <TabsContent value="code" className="flex-grow overflow-auto p-4">
