@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { ElementSelector } from './ElementSelector'
 import { OptionSelector } from './OptionSelector'
@@ -8,7 +7,6 @@ import PreviewAndCode from './PreviewAndCode'
 import { useSectionBuilder } from '../context/SectionBuilderContext'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { NodeTree } from './NodeTree'
 
 export default function SectionBuilder() {
   const { componentName, setComponentName } = useSectionBuilder()
