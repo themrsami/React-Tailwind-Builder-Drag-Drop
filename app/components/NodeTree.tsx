@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { ChevronRight, ChevronDown, Plus, Edit2 } from 'lucide-react'
+import { ChevronRight, ChevronDown, Plus, Edit2, Move } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -22,9 +22,10 @@ interface NodeProps {
   onRenameNode: (nodeId: string, newName: string, newTagName: string, newText?: string) => void
   selectedNodes: string[]
   onSelectNode: (nodeId: string, isCtrlPressed: boolean) => void
+  onMoveNodes: (targetNodeId: string) => void
 }
 
-const Node: React.FC<NodeProps> = ({ node, level, onAddChild, onRenameNode, selectedNodes, onSelectNode }) => {
+const Node: React.FC<NodeProps> = ({ node, level, onAddChild, onRenameNode, selectedNodes, onSelectNode, onMoveNodes }) => {
   const [isExpanded, setIsExpanded] = useState(true)
   const [newNodeName, setNewNodeName] = useState('')
   const [newNodeTagName, setNewNodeTagName] = useState('')
@@ -63,6 +64,11 @@ const Node: React.FC<NodeProps> = ({ node, level, onAddChild, onRenameNode, sele
   const handleNodeClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     onSelectNode(node.id, e.ctrlKey)
+  }
+
+  const handleMoveClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    onMoveNodes(node.id)
   }
 
   return (
@@ -114,6 +120,9 @@ const Node: React.FC<NodeProps> = ({ node, level, onAddChild, onRenameNode, sele
             <Button variant="ghost" size="icon" onClick={startRenaming}>
               <Edit2 size={16} />
             </Button>
+            <Button variant="ghost" size="icon" onClick={handleMoveClick}>
+              <Move size={16} />
+            </Button>
           </>
         )}
       </div>
@@ -126,6 +135,7 @@ const Node: React.FC<NodeProps> = ({ node, level, onAddChild, onRenameNode, sele
           onRenameNode={onRenameNode}
           selectedNodes={selectedNodes}
           onSelectNode={onSelectNode}
+          onMoveNodes={onMoveNodes}
         />
       ))}
       {selectedNodes.includes(node.id) && (
@@ -197,6 +207,44 @@ export const NodeTree: React.FC = () => {
     })
   }, [setSelectedNodes])
 
+  const handleMoveNodes = useCallback((targetNodeId: string) => {
+    updateNodeTree(prevTree => {
+      const moveNodes = (nodes: TreeNode[]): [TreeNode[], TreeNode[]] => {
+        const movedNodes: TreeNode[] = []
+        const remainingNodes = nodes.filter(node => {
+          if (selectedNodes.includes(node.id) && node.id !== targetNodeId) {
+            movedNodes.push(node)
+            return false
+          }
+          if (node.children.length > 0) {
+            const [moved, remaining] = moveNodes(node.children)
+            movedNodes.push(...moved)
+            node.children = remaining
+          }
+          return true
+        })
+        return [movedNodes, remainingNodes]
+      }
+
+      const [movedNodes, updatedTree] = moveNodes(prevTree)
+
+      const insertNodes = (nodes: TreeNode[]): TreeNode[] => {
+        return nodes.map(node => {
+          if (node.id === targetNodeId) {
+            return { ...node, children: [...node.children, ...movedNodes] }
+          } else if (node.children.length > 0) {
+            return { ...node, children: insertNodes(node.children) }
+          }
+          return node
+        })
+      }
+
+      const finalTree = insertNodes(updatedTree)
+      setSelectedNodes([])
+      return finalTree
+    })
+  }, [updateNodeTree, selectedNodes, setSelectedNodes])
+
   return (
     <div className="p-4 space-y-4 h-full overflow-y-auto">
       <h2 className="text-lg font-semibold">Node Tree</h2>
@@ -209,6 +257,7 @@ export const NodeTree: React.FC = () => {
           onRenameNode={handleRenameNode}
           selectedNodes={selectedNodes}
           onSelectNode={handleSelectNode}
+          onMoveNodes={handleMoveNodes}
         />
       ))}
     </div>
