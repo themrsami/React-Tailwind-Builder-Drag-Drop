@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { ChevronRight, ChevronDown, Plus, Edit2, Move } from 'lucide-react'
+import React, { useState, useCallback } from 'react'
+import { ChevronRight, ChevronDown, Plus, Edit2, Move, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -18,18 +18,25 @@ interface TreeNode {
 interface NodeProps {
   node: TreeNode
   level: number
-  onAddChild: (parentId: string, childName: string, childTagName: string, childText?: string) => void
+  onAddChild: (parentId: string | null, childTagName: string) => void
   onRenameNode: (nodeId: string, newName: string, newTagName: string, newText?: string) => void
+  onDeleteNode: (nodeId: string) => void
   selectedNodes: string[]
   onSelectNode: (nodeId: string, isCtrlPressed: boolean) => void
   onMoveNodes: (targetNodeId: string) => void
 }
 
-const Node: React.FC<NodeProps> = ({ node, level, onAddChild, onRenameNode, selectedNodes, onSelectNode, onMoveNodes }) => {
+const Node: React.FC<NodeProps> = ({ 
+  node, 
+  level, 
+  onAddChild, 
+  onRenameNode, 
+  onDeleteNode,
+  selectedNodes, 
+  onSelectNode, 
+  onMoveNodes 
+}) => {
   const [isExpanded, setIsExpanded] = useState(true)
-  const [newNodeName, setNewNodeName] = useState('')
-  const [newNodeTagName, setNewNodeTagName] = useState('')
-  const [newNodeText, setNewNodeText] = useState('')
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameName, setRenameName] = useState(node.name)
   const [renameTagName, setRenameTagName] = useState(node.tagName)
@@ -38,15 +45,6 @@ const Node: React.FC<NodeProps> = ({ node, level, onAddChild, onRenameNode, sele
   const toggleExpand = (e: React.MouseEvent) => {
     e.stopPropagation()
     setIsExpanded(!isExpanded)
-  }
-
-  const addChild = () => {
-    if (newNodeName.trim() && newNodeTagName.trim()) {
-      onAddChild(node.id, newNodeName.trim(), newNodeTagName.trim(), newNodeText.trim() || undefined)
-      setNewNodeName('')
-      setNewNodeTagName('')
-      setNewNodeText('')
-    }
   }
 
   const startRenaming = (e: React.MouseEvent) => {
@@ -71,8 +69,13 @@ const Node: React.FC<NodeProps> = ({ node, level, onAddChild, onRenameNode, sele
     onMoveNodes(node.id)
   }
 
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+      onDeleteNode(node.id)
+  }
+
   return (
-    <div style={{ marginLeft: `${level * 20}px` }}>
+    <div style={{ marginLeft: `${level * 20}px`, position: 'relative' }} className="relative">
       <div 
         className={`flex items-center p-2 cursor-pointer ${selectedNodes.includes(node.id) ? 'bg-blue-100' : ''}`}
         onClick={handleNodeClick}
@@ -82,11 +85,13 @@ const Node: React.FC<NodeProps> = ({ node, level, onAddChild, onRenameNode, sele
             {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           </Button>
         )}
-        <Checkbox
-          checked={selectedNodes.includes(node.id)}
-          onCheckedChange={() => onSelectNode(node.id, true)}
-          className="mr-2"
-        />
+        {node.tagName !== 'React.Fragment' && (
+          <Checkbox
+            checked={selectedNodes.includes(node.id)}
+            onCheckedChange={() => onSelectNode(node.id, true)}
+            className="mr-2"
+          />
+        )}
         {isRenaming ? (
           <>
             <Input
@@ -123,6 +128,12 @@ const Node: React.FC<NodeProps> = ({ node, level, onAddChild, onRenameNode, sele
             <Button variant="ghost" size="icon" onClick={handleMoveClick}>
               <Move size={16} />
             </Button>
+            <Button variant="ghost" size="icon" onClick={handleDeleteClick}>
+              <Trash2 size={16} />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => onAddChild(node.id, 'div')}>
+              <Plus size={16} />
+            </Button>
           </>
         )}
       </div>
@@ -133,39 +144,12 @@ const Node: React.FC<NodeProps> = ({ node, level, onAddChild, onRenameNode, sele
           level={level + 1} 
           onAddChild={onAddChild} 
           onRenameNode={onRenameNode}
+          onDeleteNode={onDeleteNode}
           selectedNodes={selectedNodes}
           onSelectNode={onSelectNode}
           onMoveNodes={onMoveNodes}
         />
       ))}
-      {selectedNodes.includes(node.id) && (
-        <>
-        <h2 className="text-lg font-semibold mt-2">Add Node Chid</h2>
-        <div className="flex items-center mt-2">
-          <Input
-            value={newNodeName}
-            onChange={(e) => setNewNodeName(e.target.value)}
-            placeholder="New node name"
-            className="mr-2"
-          />
-          <Input
-            value={newNodeTagName}
-            onChange={(e) => setNewNodeTagName(e.target.value)}
-            placeholder="New tag name"
-            className="mr-2"
-          />
-          <Input
-            value={newNodeText}
-            onChange={(e) => setNewNodeText(e.target.value)}
-            placeholder="Text (optional)"
-            className="mr-2"
-          />
-          <Button onClick={addChild} size="icon" className='px-4'>
-            <Plus size={32} />
-          </Button>
-        </div>
-        </>
-      )}
     </div>
   )
 }
@@ -173,15 +157,24 @@ const Node: React.FC<NodeProps> = ({ node, level, onAddChild, onRenameNode, sele
 export const NodeTree: React.FC = () => {
   const { nodeTree, updateNodeTree, renameNode, selectedNodes, setSelectedNodes } = useSectionBuilder()
 
-  const handleAddChild = useCallback((parentId: string, childName: string, childTagName: string, childText?: string) => {
+  const handleAddChild = useCallback((parentId: string | null, childTagName: string) => {
     const newNode: TreeNode = {
       id: Math.random().toString(36).substr(2, 9),
-      name: childName,
+      name: `New ${childTagName}`,
       tagName: childTagName,
       children: [],
-      text: childText
     }
     updateNodeTree(prevTree => {
+      if (prevTree.length === 0) {
+        return [
+          {
+            id: 'fragment',
+            name: 'Fragment',
+            tagName: 'React.Fragment',
+            children: [newNode]
+          }
+        ]
+      }
       const addChildToNode = (nodes: TreeNode[]): TreeNode[] => {
         return nodes.map(node => {
           if (node.id === parentId) {
@@ -199,6 +192,23 @@ export const NodeTree: React.FC = () => {
   const handleRenameNode = useCallback((nodeId: string, newName: string, newTagName: string, newText?: string) => {
     renameNode(nodeId, newName, newTagName, newText)
   }, [renameNode])
+
+  const handleDeleteNode = useCallback((nodeId: string) => {
+    updateNodeTree(prevTree => {
+      const deleteNode = (nodes: TreeNode[]): TreeNode[] => {
+        return nodes.filter(node => {
+          if (node.id === nodeId) {
+            return false
+          }
+          if (node.children.length > 0) {
+            node.children = deleteNode(node.children)
+          }
+          return true
+        })
+      }
+      return deleteNode(prevTree)
+    })
+  }, [updateNodeTree])
 
   const handleSelectNode = useCallback((nodeId: string, isCtrlPressed: boolean) => {
     setSelectedNodes(prev => {
@@ -251,18 +261,29 @@ export const NodeTree: React.FC = () => {
   return (
     <div className="p-4 space-y-4 h-full overflow-y-auto">
       <h2 className="text-lg font-semibold">Node Tree</h2>
-      {nodeTree.map(node => (
-        <Node 
-          key={node.id} 
-          node={node} 
-          level={0} 
-          onAddChild={handleAddChild} 
-          onRenameNode={handleRenameNode}
-          selectedNodes={selectedNodes}
-          onSelectNode={handleSelectNode}
-          onMoveNodes={handleMoveNodes}
-        />
-      ))}
+      {nodeTree.length === 0 ? (
+        <Button
+          variant="outline"
+          onClick={() => handleAddChild(null, 'div')}
+          className="mt-4"
+        >
+          Add Root Element
+        </Button>
+      ) : (
+        nodeTree.map(node => (
+          <Node 
+            key={node.id} 
+            node={node} 
+            level={0} 
+            onAddChild={handleAddChild} 
+            onRenameNode={handleRenameNode}
+            onDeleteNode={handleDeleteNode}
+            selectedNodes={selectedNodes}
+            onSelectNode={handleSelectNode}
+            onMoveNodes={handleMoveNodes}
+          />
+        ))
+      )}
     </div>
   )
 }

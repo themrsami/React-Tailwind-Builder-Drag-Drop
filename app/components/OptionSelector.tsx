@@ -8,12 +8,21 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Spinner } from '@/components/ui/spinner'
 import { Checkbox } from '@/components/ui/checkbox'
 
+interface TreeNode {
+  id: string
+  name: string
+  tagName: string
+  children: TreeNode[]
+  text?: string
+  attributes?: Record<string, string>
+}
+
 interface TailwindClasses {
   [key: string]: string[]
 }
 
 export const OptionSelector: React.FC = () => {
-  const { selectedElement, options, updateOption, selectedNodes } = useSectionBuilder()
+  const { selectedElement, nodeTree, updateNodeTree, selectedNodes } = useSectionBuilder()
   const [tailwindClasses, setTailwindClasses] = useState<TailwindClasses>({})
   const [isLoading, setIsLoading] = useState(true)
 
@@ -23,43 +32,49 @@ export const OptionSelector: React.FC = () => {
       .then(response => response.text())
       .then(css => {
         const classes: TailwindClasses = {
-          width: [],
-          height: [],
-          padding: [],
-          margin: [],
-          display: [],
-          position: [],
+          layout: [],
           flexbox: [],
           grid: [],
-          backgroundColor: [],
-          textColor: [],
-          borderColor: [],
-          borderWidth: [],
-          borderRadius: [],
-          boxShadow: [],
-          opacity: [],
+          spacing: [],
+          sizing: [],
+          typography: [],
+          backgrounds: [],
+          borders: [],
+          effects: [],
+          filters: [],
+          tables: [],
+          transitions: [],
+          transforms: [],
+          interactivity: [],
+          svg: [],
+          accessibility: [],
         }
 
-        const classRegex = /\.([a-zA-Z0-9-]+)\{/g
+        const classRegex = /\.([a-zA-Z0-9-]+)/g
         let match
         while ((match = classRegex.exec(css)) !== null) {
           const className = match[1]
-          if (className.startsWith('w-')) classes.width.push(className)
-          else if (className.startsWith('h-')) classes.height.push(className)
-          else if (className.startsWith('p-') || className.startsWith('px-') || className.startsWith('py-')) classes.padding.push(className)
-          else if (className.startsWith('m-') || className.startsWith('mx-') || className.startsWith('my-')) classes.margin.push(className)
-          else if (className.startsWith('flex') || className.startsWith('items-') || className.startsWith('justify-')) classes.flexbox.push(className)
-          else if (className.startsWith('grid-') || className.startsWith('col-') || className.startsWith('row-')) classes.grid.push(className)
-          else if (className.startsWith('bg-')) classes.backgroundColor.push(className)
-          
-          else if (className.startsWith('text-') && !className.includes('align') && !className.includes('decoration')) classes.textColor.push(className)
-          else if (className.startsWith('border-') && className.length > 7) classes.borderColor.push(className)
-          else if (className.startsWith('border-') && className.length <= 7) classes.borderWidth.push(className)
-          else if (className.startsWith('rounded')) classes.borderRadius.push(className)
-          else if (className.startsWith('shadow')) classes.boxShadow.push(className)
-          else if (className.startsWith('opacity')) classes.opacity.push(className)
-          else if (className === 'block' || className === 'inline' || className === 'inline-block' || className === 'hidden') classes.display.push(className)
-          else if (className.startsWith('absolute') || className.startsWith('relative') || className.startsWith('fixed') || className.startsWith('sticky')) classes.position.push(className)
+          if (className.startsWith('container') || className.startsWith('columns-') || className.startsWith('break-') || className.startsWith('box-')) classes.layout.push(className)
+          else if (className.startsWith('flex') || className.startsWith('order-') || className.startsWith('justify-') || className.startsWith('items-') || className.startsWith('content-')) classes.flexbox.push(className)
+          else if (className.startsWith('grid') || className.startsWith('col-') || className.startsWith('row-')) classes.grid.push(className)
+          else if (className.startsWith('p-') || className.startsWith('m-') || className.startsWith('space-')) classes.spacing.push(className)
+          else if (className.startsWith('w-') || className.startsWith('h-') || className.startsWith('min-') || className.startsWith('max-')) classes.sizing.push(className)
+          else if (className.startsWith('font-') || className.startsWith('text-') || className.startsWith('leading-') || className.startsWith('tracking-') || className.startsWith('align-')) classes.typography.push(className)
+          else if (className.startsWith('bg-') || className.startsWith('from-') || className.startsWith('via-') || className.startsWith('to-')) classes.backgrounds.push(className)
+          else if (className.startsWith('border') || className.startsWith('rounded')) classes.borders.push(className)
+          else if (className.startsWith('shadow') || className.startsWith('opacity') || className.startsWith('mix-blend-')) classes.effects.push(className)
+          else if (className.startsWith('blur') || className.startsWith('brightness') || className.startsWith('contrast') || className.startsWith('grayscale') || className.startsWith('hue-rotate') || className.startsWith('invert') || className.startsWith('saturate') || className.startsWith('sepia')) classes.filters.push(className)
+          else if (className.startsWith('table-')) classes.tables.push(className)
+          else if (className.startsWith('transition') || className.startsWith('duration-') || className.startsWith('ease-') || className.startsWith('delay-')) classes.transitions.push(className)
+          else if (className.startsWith('scale-') || className.startsWith('rotate-') || className.startsWith('translate-') || className.startsWith('skew-')) classes.transforms.push(className)
+          else if (className.startsWith('cursor-') || className.startsWith('pointer-events-') || className.startsWith('resize-') || className.startsWith('select-') || className.startsWith('scroll-')) classes.interactivity.push(className)
+          else if (className.startsWith('fill-') || className.startsWith('stroke-')) classes.svg.push(className)
+          else if (className.startsWith('sr-') || className.startsWith('not-sr-')) classes.accessibility.push(className)
+        }
+
+        // Remove duplicates
+        for (const key in classes) {
+          classes[key] = Array.from(new Set(classes[key]))
         }
 
         setTailwindClasses(classes)
@@ -72,17 +87,34 @@ export const OptionSelector: React.FC = () => {
   }, [])
 
   const handleOptionChange = (key: string, value: string, isChecked: boolean) => {
-    selectedNodes.forEach(nodeId => {
-      const currentOptions = options[nodeId]?.[key] ? options[nodeId][key].split(' ') : []
-      let newOptions: string[]
+    updateNodeTree(prevTree => {
+      const updateNodeClasses = (node: TreeNode): TreeNode => {
+        if (selectedNodes.includes(node.id)) {
+          const currentClasses = node.attributes?.className?.split(' ') || []
+          let newClasses: string[]
 
-      if (isChecked) {
-        newOptions = [...currentOptions, value]
-      } else {
-        newOptions = currentOptions.filter(option => option !== value)
+          if (isChecked) {
+            newClasses = [...currentClasses, value]
+          } else {
+            newClasses = currentClasses.filter(cls => cls !== value)
+          }
+
+          return {
+            ...node,
+            attributes: {
+              ...node.attributes,
+              className: newClasses.join(' ')
+            }
+          }
+        }
+
+        return {
+          ...node,
+          children: node.children.map(updateNodeClasses)
+        }
       }
 
-      updateOption(nodeId, key, newOptions.join(' '))
+      return prevTree.map(updateNodeClasses)
     })
   }
 
@@ -113,7 +145,10 @@ export const OptionSelector: React.FC = () => {
                       <div key={cls} className="flex items-center space-x-2">
                         <Checkbox
                           id={cls}
-                          checked={selectedNodes.every(nodeId => options[nodeId]?.[key]?.includes(cls))}
+                          checked={selectedNodes.every(nodeId => {
+                            const node = findNodeById(nodeTree, nodeId)
+                            return node?.attributes?.className?.includes(cls) || false
+                          })}
                           onCheckedChange={(checked) => handleOptionChange(key, cls, checked as boolean)}
                         />
                         <Label htmlFor={cls}>{cls}</Label>
@@ -131,18 +166,49 @@ export const OptionSelector: React.FC = () => {
   }
 
   return (
-    <div className="p-4 space-y-4 h-full overflow-y-auto">
-      <h2 className="text-lg font-semibold">Options for selected nodes</h2>
-      {renderOptions()}
+        <div className="p-4 space-y-4 h-full overflow-y-auto">
       <div className="space-y-2">
         <Label htmlFor="customClasses">Custom Classes</Label>
         <Input
           id="customClasses"
-          value={selectedNodes.length === 1 ? options[selectedNodes[0]]?.customClasses || '' : ''}
-          onChange={(e) => selectedNodes.forEach(nodeId => updateOption(nodeId, 'customClasses', e.target.value))}
+          value={selectedNodes.length === 1 ? findNodeById(nodeTree, selectedNodes[0])?.attributes?.className || '' : ''}
+          onChange={(e) => {
+            updateNodeTree(prevTree => {
+              const updateNodeClasses = (node: TreeNode): TreeNode => {
+                if (selectedNodes.includes(node.id)) {
+                  return {
+                    ...node,
+                    attributes: {
+                      ...node.attributes,
+                      className: e.target.value
+                    }
+                  }
+                }
+                return {
+                  ...node,
+                  children: node.children.map(updateNodeClasses)
+                }
+              }
+              return prevTree.map(updateNodeClasses)
+            })
+          }}
           placeholder="Enter custom Tailwind classes"
         />
       </div>
+      <div className="overflow-y-auto h-[80vh] hide-scrollbar"> {/* Adjust the height as needed */}
+        <h2 className="text-lg font-semibold">Options for selected nodes</h2>
+        {renderOptions()}
+      </div>
     </div>
   )
+}
+
+// Helper function to find a node by ID
+function findNodeById(tree: TreeNode[], id: string): TreeNode | undefined {
+  for (const node of tree) {
+    if (node.id === id) return node
+    const found = findNodeById(node.children, id)
+    if (found) return found
+  }
+  return undefined
 }

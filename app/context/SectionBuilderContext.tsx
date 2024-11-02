@@ -25,6 +25,11 @@ interface SectionBuilderContextType {
   renameNode: (nodeId: string, newName: string, newTagName: string, newText?: string) => void
   selectedNodes: string[]
   setSelectedNodes: React.Dispatch<React.SetStateAction<string[]>>
+  currentReactCode: string
+  
+  setCurrentReactCode: (code: string) => void
+  currentHtmlCode: string
+  setCurrentHtmlCode: (code: string) => void
 }
 
 const SectionBuilderContext = createContext<SectionBuilderContextType | undefined>(undefined)
@@ -41,10 +46,10 @@ export const SectionBuilderProvider: React.FC<{ children: ReactNode }> = ({ chil
   const [selectedElement, setSelectedElement] = useState<ElementType | null>(null)
   const [options, setOptions] = useState<Record<string, Record<string, string>>>({})
   const [componentName, setComponentName] = useState<string>('MySection')
-  const [nodeTree, setNodeTree] = useState<TreeNode[]>([
-    { id: 'root', name: 'Root', tagName: 'div', children: [] }
-  ])
+  const [nodeTree, setNodeTree] = useState<TreeNode[]>([])
   const [selectedNodes, setSelectedNodes] = useState<string[]>([])
+  const [currentReactCode, setCurrentReactCode] = useState('')
+  const [currentHtmlCode, setCurrentHtmlCode] = useState('')
 
   const updateOption = useCallback((nodeId: string, key: string, value: string) => {
     setOptions(prevOptions => {
@@ -96,6 +101,10 @@ export const SectionBuilderProvider: React.FC<{ children: ReactNode }> = ({ chil
         renameNode,
         selectedNodes,
         setSelectedNodes,
+        currentReactCode,
+        setCurrentReactCode,
+        currentHtmlCode,
+        setCurrentHtmlCode,
       }}
     >
       {children}
