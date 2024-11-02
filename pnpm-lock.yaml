@@ -20,6 +20,9 @@ importers:
       '@babel/traverse':
         specifier: ^7.25.9
         version: 7.25.9
+      '@babel/types':
+        specifier: ^7.26.0
+        version: 7.26.0
       '@monaco-editor/react':
         specifier: ^4.6.0
         version: 4.6.0(monaco-editor@0.52.0)(react-dom@19.0.0-rc-02c0e824-20241028(react@19.0.0-rc-02c0e824-20241028))(react@19.0.0-rc-02c0e824-20241028)

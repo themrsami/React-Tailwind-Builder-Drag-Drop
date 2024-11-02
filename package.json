@@ -13,6 +13,7 @@
     "@babel/parser": "^7.26.2",
     "@babel/standalone": "^7.26.2",
     "@babel/traverse": "^7.25.9",
+    "@babel/types": "^7.26.0",
     "@monaco-editor/react": "^4.6.0",
     "@radix-ui/react-accordion": "^1.2.1",
     "@radix-ui/react-checkbox": "^1.1.2",

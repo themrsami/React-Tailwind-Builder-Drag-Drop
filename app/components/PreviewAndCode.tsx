@@ -1,12 +1,11 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import * as monaco from 'monaco-editor'
 import { useSectionBuilder } from '../context/SectionBuilderContext'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
-import { Copy, Plus } from 'lucide-react'
+import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { NodeTree } from './NodeTree'
 import { DndProvider, useDrag, useDrop } from 'react-dnd'
@@ -16,6 +15,7 @@ import { parse } from '@babel/parser'
 import traverse from '@babel/traverse'
 import generate from '@babel/generator'
 import { v4 as uuidv4 } from 'uuid'
+import * as t from '@babel/types'
 
 interface TreeNode {
   id: string
@@ -111,21 +111,21 @@ export const ${componentName} = () => {
 </body>
 </html>`)
 
-  const generateNodeJSX = (node: TreeNode, indent: string = ''): string => {
-    if (!node.tagName) {
-      console.error('Tag name must be provided')
-      return ''
-    }
-    const attributes = node.attributes ? Object.entries(node.attributes)
-      .map(([key, value]) => `${key}="${value}"`)
-      .join(' ') : ''
-    const openTag = node.tagName === 'React.Fragment' ? '<>' : `<${node.tagName} ${attributes}>`
-    const closeTag = node.tagName === 'React.Fragment' ? '</>' : `</${node.tagName}>`
-    const childrenJSX = node.children.map(child => generateNodeJSX(child, indent + '  ')).join('\n')
-    return `${indent}${openTag}
-${childrenJSX || (node.text ? `${indent}  ${node.text}` : '')}
-${indent}${closeTag}`
+const generateNodeJSX = useCallback((node: TreeNode, indent: string = ''): string => {
+  if (!node.tagName) {
+    console.error('Tag name must be provided');
+    return '';
   }
+  const attributes = node.attributes ? Object.entries(node.attributes)
+    .map(([key, value]) => `${key}="${value}"`)
+    .join(' ') : '';
+  const openTag = node.tagName === 'React.Fragment' ? '<>' : `<${node.tagName} ${attributes}>`;
+  const closeTag = node.tagName === 'React.Fragment' ? '</>' : `</${node.tagName}>`;
+  const childrenJSX = node.children.map(child => generateNodeJSX(child, indent + '  ')).join('\n');
+  return `${indent}${openTag}
+${childrenJSX || (node.text ? `${indent}  ${node.text}` : '')}
+${indent}${closeTag}`;
+}, []);
 
   const generateReactCode = useMemo(() => {
     if (nodeTree.length === 0) {
@@ -146,70 +146,78 @@ ${jsxContent}
   )
 }
 `
-  }, [componentName, nodeTree])
+  }, [componentName, nodeTree, generateNodeJSX])
 
-  const generateHtmlCode = (nodeTree: TreeNode[]): string => {
+  const generateHtmlCode = useCallback((nodeTree: TreeNode[]): string => {
     const jsxContent = nodeTree.map(node => {
       const nodeJsx = generateNodeJSX(node);
       // Replace React fragments with a single div
-      return nodeJsx.replace(/<>\s*|\s*<\/>/g, '').replace(/<\/>\s*|\s*<\/>/g, '');
+      return nodeJsx.replace(/<>\s*|\s*<\/>/g, '').replace(/<\/>\\s*|\s*<\/>/g, '');
     }).join('\n');
-
+  
     // Replace className with class
     const htmlContent = jsxContent.replace(/className=/g, 'class=');
-
+  
     return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${componentName}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body>
-${htmlContent}
-</body>
-</html>`;
-  }
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${componentName}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body>
+  ${htmlContent}
+  </body>
+  </html>`;
+  }, [generateNodeJSX, componentName]);
 
   useEffect(() => {
     setReactCode(generateReactCode)
     setHtmlCode(generateHtmlCode(nodeTree))
     setCurrentReactCode(generateReactCode)
     setCurrentHtmlCode(generateHtmlCode(nodeTree))
-  }, [generateReactCode, nodeTree, setCurrentReactCode, setCurrentHtmlCode])
+  }, [generateReactCode, nodeTree, setCurrentReactCode, setCurrentHtmlCode, generateHtmlCode])
 
-  const parseJSXToNodeTree = (jsxElement: any): TreeNode => {
+  const parseJSXToNodeTree = (jsxElement: t.JSXElement): TreeNode => {
     const node: TreeNode = {
       id: uuidv4(),
-      name: jsxElement.openingElement.name.name,
-      tagName: jsxElement.openingElement.name.name,
+      name: t.isJSXIdentifier(jsxElement.openingElement.name) ? jsxElement.openingElement.name.name : '',
+      tagName: t.isJSXIdentifier(jsxElement.openingElement.name) ? jsxElement.openingElement.name.name : '',
       children: [],
       attributes: {}
     }
 
-    jsxElement.openingElement.attributes.forEach((attr: any) => {
-      if (attr.type === 'JSXAttribute') {
-        if (attr.value.type === 'StringLiteral') {
-          node.attributes![attr.name.name] = attr.value.value
-        } else if (attr.value.type === 'JSXExpressionContainer') {
-          node.attributes![attr.name.name] = generate(attr.value.expression).code
+    jsxElement.openingElement.attributes.forEach((attr) => {
+      if (t.isJSXAttribute(attr)) {
+        if (t.isStringLiteral(attr.value)) {
+          node.attributes![attr.name.name as string] = attr.value.value
+        } else if (t.isJSXExpressionContainer(attr.value)) {
+          if (t.isJSXIdentifier(attr.name)) {
+            node.attributes![attr.name.name] = generate(attr.value.expression).code
+          }
         }
       }
     })
 
-    jsxElement.children.forEach((child: any) => {
-      if (child.type === 'JSXElement') {
+    jsxElement.children.forEach((child) => {
+      if (t.isJSXElement(child)) {
         node.children.push(parseJSXToNodeTree(child))
-      } else if (child.type === 'JSXText' && child.value.trim()) {
+      } else if (t.isJSXText(child) && child.value.trim()) {
         node.text = child.value.trim()
+      } else if (t.isJSXExpressionContainer(child)) {
+        // Handle JSXExpressionContainer if needed
+      } else if (t.isJSXFragment(child)) {
+        // Handle JSXFragment if needed
+      } else if (t.isJSXSpreadChild(child)) {
+        // Handle JSXSpreadChild if needed
       }
     })
 
     return node
   }
 
-  const handleReactCodeChange = (newCode: string | undefined, event: monaco.editor.IModelContentChangedEvent) => {
+  const handleReactCodeChange = (newCode: string | undefined) => {
     if (newCode === undefined) return
 
     try {
